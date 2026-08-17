@@ -54,7 +54,21 @@ export function ReadinessCard({
   readiness: Readiness;
   onChange: (r: Readiness) => void;
 }) {
+  const [energyOverridden, setEnergyOverridden] = useState(false);
   const score = readinessScore(readiness);
+
+  const handleSleepChange = (v: number) => {
+    const next = { ...readiness, sleepHours: v };
+    if (!energyOverridden) {
+      next.energy = defaultEnergyFromSleep(v);
+    }
+    onChange(next);
+  };
+
+  const handleEnergyChange = (v: number) => {
+    setEnergyOverridden(true);
+    onChange({ ...readiness, energy: v });
+  };
 
   return (
     <section className="glass-card p-5">
