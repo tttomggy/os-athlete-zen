@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, type EntryRow } from "@/integrations/supabase/client";
 
-export type EntryKind = EntryRow["kind"];
+export type EntryKind = EntryRow["type"];
 
 export type Entry = {
   id: string;
@@ -43,7 +43,7 @@ export function readinessLabel(score: number) {
 function toEntry(row: EntryRow): Entry {
   return {
     id: row.id,
-    kind: row.kind,
+    kind: row.type,
     at: row.created_at,
     title: row.title,
     details: row.details ?? [],
@@ -80,7 +80,7 @@ export function useAthleticOS() {
   const refresh = useCallback(async () => {
     const { data, error: err } = await supabase
       .from("entries")
-      .select("id, kind, title, details, created_at")
+      .select("id, type, title, subtitle, details, created_at")
       .gte("created_at", startOfTodayISO())
       .order("created_at", { ascending: false });
 
@@ -123,8 +123,8 @@ export function useAthleticOS() {
 
       const { data, error: err } = await supabase
         .from("entries")
-        .insert({ kind, title, details: clean })
-        .select("id, kind, title, details, created_at")
+        .insert({ type: kind, title, details: clean })
+        .select("id, type, title, subtitle, details, created_at")
         .single();
 
       if (err) {
