@@ -28,11 +28,20 @@ export function Timeline({
         </span>
       </div>
 
-      {entries.length === 0 ? (
+      {error ? (
+        <p className="mt-4 rounded-xl border border-destructive/50 bg-destructive/15 p-3 text-sm text-foreground">
+          Couldn't reach your database: {error}
+        </p>
+      ) : null}
+
+      {loading ? (
+        <p className="mt-4 text-sm text-muted-foreground">Syncing today's log…</p>
+      ) : entries.length === 0 ? (
         <p className="mt-4 text-sm text-muted-foreground">
           Nothing yet today. Log a session above and it lands here instantly.
         </p>
       ) : (
+
         <ul className="mt-4 space-y-3">
           {entries.map((e) => (
             <li key={e.id} className="relative flex gap-3 pl-1">
