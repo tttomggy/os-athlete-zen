@@ -1,8 +1,10 @@
--- Run this once in your Supabase project: SQL Editor -> New query -> Run
+-- Reference schema for public.entries (already present in your project).
+-- Run only if you need to recreate it.
 create table if not exists public.entries (
   id uuid primary key default gen_random_uuid(),
-  kind text not null check (kind in ('swim','gym','fuel','recovery')),
+  type text not null check (type in ('swim','gym','fuel','recovery')),
   title text not null,
+  subtitle text,
   details text[] not null default '{}',
   created_at timestamptz not null default now()
 );
@@ -20,5 +22,5 @@ create policy "entries deletable" on public.entries for delete using (true);
 
 create index if not exists entries_created_at_idx on public.entries (created_at desc);
 
--- Live timeline updates
+-- Live timeline updates (skip if already added)
 alter publication supabase_realtime add table public.entries;
