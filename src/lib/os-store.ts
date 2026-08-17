@@ -9,6 +9,17 @@ export type Entry = {
   at: string;
   title: string;
   details: string[];
+  proteinPalms: number | null;
+  carbCups: number | null;
+  fatThumbs: number | null;
+  notes: string | null;
+};
+
+export type EntryExtras = {
+  fuel_protein_palms?: number | null;
+  fuel_carb_cups?: number | null;
+  fuel_fat_thumbs?: number | null;
+  notes?: string | null;
 };
 
 export type Readiness = {
@@ -19,6 +30,15 @@ export type Readiness = {
 };
 
 const READINESS_KEY = "aros.readiness.v1";
+
+const BASE_COLS = "id, type, title, subtitle, details, created_at";
+const EXT_COLS = `${BASE_COLS}, fuel_protein_palms, fuel_carb_cups, fuel_fat_thumbs, notes`;
+
+/** Flipped to false when the database has not been migrated with the hand-measure columns yet. */
+let extendedSchema = true;
+export const cols = () => (extendedSchema ? EXT_COLS : BASE_COLS);
+const isMissingColumn = (err: { code?: string; message?: string } | null) =>
+  err?.code === "42703" || /does not exist/i.test(err?.message ?? "");
 
 export const defaultReadiness: Readiness = {
   sleepHours: 7.5,
@@ -40,13 +60,17 @@ export function readinessLabel(score: number) {
   return "Recover";
 }
 
-function toEntry(row: EntryRow): Entry {
+export function toEntry(row: EntryRow): Entry {
   return {
     id: row.id,
     kind: row.type,
     at: row.created_at,
     title: row.title,
     details: row.details ?? [],
+    proteinPalms: row.fuel_protein_palms ?? null,
+    carbCups: row.fuel_carb_cups ?? null,
+    fatThumbs: row.fuel_fat_thumbs ?? null,
+    notes: row.notes ?? null,
   };
 }
 
@@ -56,8 +80,15 @@ function startOfTodayISO() {
   return d.toISOString();
 }
 
+function daysAgoISO(days: number) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
+
 export function useAthleticOS() {
-  const [today, setToday] = useState<Entry[]>([]);
+  const [history, setHistory] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<Readiness>(defaultReadiness);
@@ -78,16 +109,23 @@ export function useAthleticOS() {
   }, [readiness, hydrated]);
 
   const refresh = useCallback(async () => {
-    const { data, error: err } = await supabase
-      .from("entries")
-      .select("id, type, title, subtitle, details, created_at")
-      .gte("created_at", startOfTodayISO())
-      .order("created_at", { ascending: false });
+    const run = () =>
+      supabase
+        .from("entries")
+        .select(cols())
+        .gte("created_at", daysAgoISO(30))
+        .order("created_at", { ascending: false });
+
+    let { data, error: err } = await run();
+    if (err && isMissingColumn(err)) {
+      extendedSchema = false;
+      ({ data, error: err } = await run());
+    }
 
     if (err) setError(err.message);
     else {
       setError(null);
-      setToday((data as EntryRow[]).map(toEntry));
+      setHistory(((data ?? []) as unknown as EntryRow[]).map(toEntry));
     }
     setLoading(false);
   }, []);
@@ -110,7 +148,7 @@ export function useAthleticOS() {
   }, [refresh]);
 
   const addEntry = useCallback(
-    async (kind: EntryKind, title: string, details: string[]) => {
+    async (kind: EntryKind, title: string, details: string[], extras?: EntryExtras) => {
       const clean = details.filter(Boolean);
       const optimistic: Entry = {
         id: `temp-${Date.now()}`,
@@ -118,38 +156,54 @@ export function useAthleticOS() {
         at: new Date().toISOString(),
         title,
         details: clean,
+        proteinPalms: extras?.fuel_protein_palms ?? null,
+        carbCups: extras?.fuel_carb_cups ?? null,
+        fatThumbs: extras?.fuel_fat_thumbs ?? null,
+        notes: extras?.notes ?? null,
       };
-      setToday((prev) => [optimistic, ...prev]);
+      setHistory((prev) => [optimistic, ...prev]);
 
-      const { data, error: err } = await supabase
-        .from("entries")
-        .insert({ type: kind, title, details: clean })
-        .select("id, type, title, subtitle, details, created_at")
-        .single();
+      const base = { type: kind, title, details: clean };
+      const run = (withExtras: boolean) =>
+        supabase
+          .from("entries")
+          .insert(withExtras && extras ? { ...base, ...extras } : base)
+          .select(cols())
+          .single();
+
+      let { data, error: err } = await run(extendedSchema);
+      if (err && isMissingColumn(err)) {
+        extendedSchema = false;
+        ({ data, error: err } = await run(false));
+      }
 
       if (err) {
-        setToday((prev) => prev.filter((e) => e.id !== optimistic.id));
+        setHistory((prev) => prev.filter((e) => e.id !== optimistic.id));
         setError(err.message);
         return;
       }
       setError(null);
-      setToday((prev) => [
-        toEntry(data as EntryRow),
-        ...prev.filter((e) => e.id !== optimistic.id && e.id !== (data as EntryRow).id),
-      ]);
+      const saved = toEntry(data as unknown as EntryRow);
+      setHistory((prev) => [saved, ...prev.filter((e) => e.id !== optimistic.id && e.id !== saved.id)]);
     },
     [],
   );
 
-  const removeEntry = useCallback(async (id: string) => {
-    const snapshot = today;
-    setToday((prev) => prev.filter((e) => e.id !== id));
-    const { error: err } = await supabase.from("entries").delete().eq("id", id);
-    if (err) {
-      setToday(snapshot);
-      setError(err.message);
-    }
-  }, [today]);
+  const removeEntry = useCallback(
+    async (id: string) => {
+      const snapshot = history;
+      setHistory((prev) => prev.filter((e) => e.id !== id));
+      const { error: err } = await supabase.from("entries").delete().eq("id", id);
+      if (err) {
+        setHistory(snapshot);
+        setError(err.message);
+      }
+    },
+    [history],
+  );
 
-  return { today, loading, error, readiness, setReadiness, addEntry, removeEntry };
+  const todayStart = startOfTodayISO();
+  const today = history.filter((e) => e.at >= todayStart);
+
+  return { today, history, loading, error, readiness, setReadiness, addEntry, removeEntry };
 }
