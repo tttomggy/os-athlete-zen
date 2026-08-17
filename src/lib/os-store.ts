@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { supabase, type EntryRow } from "@/integrations/supabase/client";
 
-export type EntryKind = "swim" | "gym" | "fuel" | "recovery";
+export type EntryKind = EntryRow["kind"];
 
 export type Entry = {
   id: string;
@@ -17,7 +18,6 @@ export type Readiness = {
   unit: "kg" | "lbs";
 };
 
-const ENTRIES_KEY = "aros.entries.v1";
 const READINESS_KEY = "aros.readiness.v1";
 
 export const defaultReadiness: Readiness = {
@@ -26,16 +26,6 @@ export const defaultReadiness: Readiness = {
   weight: 78,
   unit: "kg",
 };
-
-function isToday(iso: string) {
-  const d = new Date(iso);
-  const n = new Date();
-  return (
-    d.getFullYear() === n.getFullYear() &&
-    d.getMonth() === n.getMonth() &&
-    d.getDate() === n.getDate()
-  );
-}
 
 export function readinessScore(r: Readiness) {
   const sleep = Math.min(r.sleepHours / 8, 1) * 55;
@@ -50,52 +40,116 @@ export function readinessLabel(score: number) {
   return "Recover";
 }
 
-function load<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
+function toEntry(row: EntryRow): Entry {
+  return {
+    id: row.id,
+    kind: row.kind,
+    at: row.created_at,
+    title: row.title,
+    details: row.details ?? [],
+  };
+}
+
+function startOfTodayISO() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
 }
 
 export function useAthleticOS() {
-  const [hydrated, setHydrated] = useState(false);
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const [today, setToday] = useState<Entry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<Readiness>(defaultReadiness);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setEntries(load<Entry[]>(ENTRIES_KEY, []));
-    setReadiness(load<Readiness>(READINESS_KEY, defaultReadiness));
+    try {
+      const raw = localStorage.getItem(READINESS_KEY);
+      if (raw) setReadiness(JSON.parse(raw) as Readiness);
+    } catch {
+      /* ignore */
+    }
     setHydrated(true);
   }, []);
-
-  useEffect(() => {
-    if (hydrated) localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
-  }, [entries, hydrated]);
 
   useEffect(() => {
     if (hydrated) localStorage.setItem(READINESS_KEY, JSON.stringify(readiness));
   }, [readiness, hydrated]);
 
-  const addEntry = useCallback((kind: EntryKind, title: string, details: string[]) => {
-    setEntries((prev) => [
-      {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  const refresh = useCallback(async () => {
+    const { data, error: err } = await supabase
+      .from("entries")
+      .select("id, kind, title, details, created_at")
+      .gte("created_at", startOfTodayISO())
+      .order("created_at", { ascending: false });
+
+    if (err) setError(err.message);
+    else {
+      setError(null);
+      setToday((data as EntryRow[]).map(toEntry));
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+
+    const channel = supabase
+      .channel("entries-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "entries" },
+        () => void refresh(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [refresh]);
+
+  const addEntry = useCallback(
+    async (kind: EntryKind, title: string, details: string[]) => {
+      const clean = details.filter(Boolean);
+      const optimistic: Entry = {
+        id: `temp-${Date.now()}`,
         kind,
         at: new Date().toISOString(),
         title,
-        details: details.filter(Boolean),
-      },
-      ...prev,
-    ]);
-  }, []);
+        details: clean,
+      };
+      setToday((prev) => [optimistic, ...prev]);
 
-  const removeEntry = useCallback((id: string) => {
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-  }, []);
+      const { data, error: err } = await supabase
+        .from("entries")
+        .insert({ kind, title, details: clean })
+        .select("id, kind, title, details, created_at")
+        .single();
 
-  const today = entries.filter((e) => isToday(e.at));
+      if (err) {
+        setToday((prev) => prev.filter((e) => e.id !== optimistic.id));
+        setError(err.message);
+        return;
+      }
+      setError(null);
+      setToday((prev) => [
+        toEntry(data as EntryRow),
+        ...prev.filter((e) => e.id !== optimistic.id && e.id !== (data as EntryRow).id),
+      ]);
+    },
+    [],
+  );
 
-  return { hydrated, entries, today, readiness, setReadiness, addEntry, removeEntry };
+  const removeEntry = useCallback(async (id: string) => {
+    const snapshot = today;
+    setToday((prev) => prev.filter((e) => e.id !== id));
+    const { error: err } = await supabase.from("entries").delete().eq("id", id);
+    if (err) {
+      setToday(snapshot);
+      setError(err.message);
+    }
+  }, [today]);
+
+  return { today, loading, error, readiness, setReadiness, addEntry, removeEntry };
 }
