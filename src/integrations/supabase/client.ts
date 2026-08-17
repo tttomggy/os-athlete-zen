@@ -10,8 +10,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
 
 export type EntryRow = {
   id: string;
-  kind: "swim" | "gym" | "fuel" | "recovery";
+  /** Column is named `type` in the database. */
+  type: "swim" | "gym" | "fuel" | "recovery";
   title: string;
-  details: string[];
+  subtitle: string | null;
+  details: string[] | null;
   created_at: string;
 };
