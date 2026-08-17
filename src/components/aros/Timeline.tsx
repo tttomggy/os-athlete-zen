@@ -9,11 +9,16 @@ const meta: Record<EntryKind, { icon: string; label: string; color: string }> = 
 
 export function Timeline({
   entries,
+  loading,
+  error,
   onRemove,
 }: {
   entries: Entry[];
-  onRemove: (id: string) => void;
+  loading?: boolean;
+  error?: string | null;
+  onRemove: (id: string) => void | Promise<void>;
 }) {
+
   return (
     <section className="glass-card p-5">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
