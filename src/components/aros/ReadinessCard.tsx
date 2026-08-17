@@ -99,7 +99,7 @@ export function ReadinessCard({
           min={0}
           max={12}
           step={0.5}
-          onChange={(v) => onChange({ ...readiness, sleepHours: v })}
+          onChange={handleSleepChange}
         />
         <Slider
           label="Energy level"
@@ -108,7 +108,7 @@ export function ReadinessCard({
           min={1}
           max={10}
           step={1}
-          onChange={(v) => onChange({ ...readiness, energy: v })}
+          onChange={handleEnergyChange}
         />
         <div>
           <div className="flex items-baseline justify-between">
