@@ -1,4 +1,12 @@
 import { readinessLabel, readinessScore, type Readiness } from "@/lib/os-store";
+import { useState } from "react";
+
+function defaultEnergyFromSleep(hours: number) {
+  if (hours < 5) return 3;
+  if (hours <= 7) return 5;
+  if (hours <= 9) return 8;
+  return 9;
+}
 
 function Slider({
   label,
@@ -46,7 +54,21 @@ export function ReadinessCard({
   readiness: Readiness;
   onChange: (r: Readiness) => void;
 }) {
+  const [energyOverridden, setEnergyOverridden] = useState(false);
   const score = readinessScore(readiness);
+
+  const handleSleepChange = (v: number) => {
+    const next = { ...readiness, sleepHours: v };
+    if (!energyOverridden) {
+      next.energy = defaultEnergyFromSleep(v);
+    }
+    onChange(next);
+  };
+
+  const handleEnergyChange = (v: number) => {
+    setEnergyOverridden(true);
+    onChange({ ...readiness, energy: v });
+  };
 
   return (
     <section className="glass-card p-5">
@@ -77,7 +99,7 @@ export function ReadinessCard({
           min={0}
           max={12}
           step={0.5}
-          onChange={(v) => onChange({ ...readiness, sleepHours: v })}
+          onChange={handleSleepChange}
         />
         <Slider
           label="Energy level"
@@ -86,7 +108,7 @@ export function ReadinessCard({
           min={1}
           max={10}
           step={1}
-          onChange={(v) => onChange({ ...readiness, energy: v })}
+          onChange={handleEnergyChange}
         />
         <div>
           <div className="flex items-baseline justify-between">
