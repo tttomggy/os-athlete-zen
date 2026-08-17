@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { EntryKind } from "@/lib/os-store";
 import { ChipRow, Field, SelectInput, SubmitButton, TextInput } from "./fields";
 
-type Props = { onLog: (kind: EntryKind, title: string, details: string[]) => void };
+type Props = { onLog: (kind: EntryKind, title: string, details: string[]) => void | Promise<void> };
 
 export function SwimForm({ onLog }: Props) {
   const [stroke, setStroke] = useState("Freestyle");
