@@ -1,4 +1,12 @@
 import { readinessLabel, readinessScore, type Readiness } from "@/lib/os-store";
+import { useState } from "react";
+
+function defaultEnergyFromSleep(hours: number) {
+  if (hours < 5) return 3;
+  if (hours <= 7) return 5;
+  if (hours <= 9) return 8;
+  return 9;
+}
 
 function Slider({
   label,
