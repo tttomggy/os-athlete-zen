@@ -16,4 +16,9 @@ export type EntryRow = {
   subtitle: string | null;
   details: string[] | null;
   created_at: string;
+  /** Hand-measure fuel columns (added by SUPABASE_SETUP.sql). */
+  fuel_protein_palms?: number | null;
+  fuel_carb_cups?: number | null;
+  fuel_fat_thumbs?: number | null;
+  notes?: string | null;
 };
