@@ -32,7 +32,8 @@ const TABS: { kind: EntryKind; icon: string; label: string; color: string }[] = 
 ];
 
 function Index() {
-  const { today, readiness, setReadiness, addEntry, removeEntry } = useAthleticOS();
+  const { today, loading, error, readiness, setReadiness, addEntry, removeEntry } =
+    useAthleticOS();
   const [active, setActive] = useState<EntryKind>("swim");
 
   return (
@@ -75,7 +76,7 @@ function Index() {
         </div>
       </section>
 
-      <Timeline entries={today} onRemove={removeEntry} />
+      <Timeline entries={today} loading={loading} error={error} onRemove={removeEntry} />
     </main>
   );
 }
