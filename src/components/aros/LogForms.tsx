@@ -1,8 +1,15 @@
 import { useState } from "react";
-import type { EntryKind } from "@/lib/os-store";
-import { ChipRow, Field, SelectInput, SubmitButton, TextInput } from "./fields";
+import type { EntryExtras, EntryKind } from "@/lib/os-store";
+import { ChipRow, Field, SelectInput, Stepper, SubmitButton, TextInput } from "./fields";
 
-type Props = { onLog: (kind: EntryKind, title: string, details: string[]) => void | Promise<void> };
+type Props = {
+  onLog: (
+    kind: EntryKind,
+    title: string,
+    details: string[],
+    extras?: EntryExtras,
+  ) => void | Promise<void>;
+};
 
 export function SwimForm({ onLog }: Props) {
   const [stroke, setStroke] = useState("Freestyle");
@@ -118,20 +125,37 @@ export function GymForm({ onLog }: Props) {
 export function FuelForm({ onLog }: Props) {
   const [meal, setMeal] = useState("Breakfast");
   const [calories, setCalories] = useState("");
-  const [protein, setProtein] = useState("");
+  const [proteinPalms, setProteinPalms] = useState(0);
+  const [carbCups, setCarbCups] = useState(0);
+  const [fatThumbs, setFatThumbs] = useState(0);
+  const [notes, setNotes] = useState("");
+
+  const hasInput = Boolean(calories) || proteinPalms > 0 || carbCups > 0 || fatThumbs > 0;
 
   return (
     <form
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!calories && !protein) return;
-        onLog("fuel", meal, [
+        if (!hasInput) return;
+        const details = [
           calories && `${calories} kcal`,
-          protein && `${protein} g protein`,
-        ].filter(Boolean) as string[]);
+          proteinPalms > 0 && `${proteinPalms} palm${proteinPalms > 1 ? "s" : ""} protein`,
+          carbCups > 0 && `${carbCups} cup${carbCups > 1 ? "s" : ""} carbs`,
+          fatThumbs > 0 && `${fatThumbs} thumb${fatThumbs > 1 ? "s" : ""} fat`,
+        ].filter(Boolean) as string[];
+        const extras: EntryExtras = {
+          fuel_protein_palms: proteinPalms || null,
+          fuel_carb_cups: carbCups || null,
+          fuel_fat_thumbs: fatThumbs || null,
+          notes: notes.trim() || null,
+        };
+        onLog("fuel", meal, details, extras);
         setCalories("");
-        setProtein("");
+        setProteinPalms(0);
+        setCarbCups(0);
+        setFatThumbs(0);
+        setNotes("");
       }}
     >
       <Field label="Meal type">
@@ -141,14 +165,43 @@ export function FuelForm({ onLog }: Props) {
           onChange={setMeal}
         />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Calories">
-          <TextInput inputMode="numeric" placeholder="620" value={calories} onChange={(e) => setCalories(e.target.value)} />
-        </Field>
-        <Field label="Protein (g)">
-          <TextInput inputMode="numeric" placeholder="45" value={protein} onChange={(e) => setProtein(e.target.value)} />
-        </Field>
+      <Field label="Calories">
+        <TextInput
+          inputMode="numeric"
+          placeholder="620"
+          value={calories}
+          onChange={(e) => setCalories(e.target.value)}
+        />
+      </Field>
+      <div className="grid grid-cols-3 gap-2">
+        <Stepper
+          label="Protein palms"
+          value={proteinPalms}
+          onChange={setProteinPalms}
+          accent="var(--fuel)"
+        />
+        <Stepper
+          label="Carb cups"
+          value={carbCups}
+          onChange={setCarbCups}
+          accent="var(--swim)"
+        />
+        <Stepper
+          label="Fat thumbs"
+          value={fatThumbs}
+          onChange={setFatThumbs}
+          accent="var(--gym)"
+        />
       </div>
+      <Field label="Notes">
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="Chicken rice bowl, felt light…"
+          className="glass-field w-full p-3.5 text-base"
+        />
+      </Field>
       <SubmitButton>Log fuel</SubmitButton>
     </form>
   );

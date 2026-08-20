@@ -75,3 +75,69 @@ export function ChipRow({
     </div>
   );
 }
+
+export function Stepper({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 99,
+  accent = "var(--primary)",
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  accent?: string;
+}) {
+  const dec = () => onChange(Math.max(min, value - 1));
+  const inc = () => onChange(Math.min(max, value + 1));
+  return (
+    <div>
+      <span className="mb-1.5 block text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={dec}
+          disabled={value <= min}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border text-2xl font-bold transition-transform active:scale-90 disabled:opacity-40"
+          style={{
+            borderColor: `color-mix(in oklab, ${accent} 55%, transparent)`,
+            background: `color-mix(in oklab, ${accent} 14%, transparent)`,
+            color: accent,
+          }}
+          aria-label={`Decrease ${label}`}
+        >
+          −
+        </button>
+        <div
+          className="flex h-12 flex-1 items-center justify-center rounded-xl border text-xl font-bold tabular-nums"
+          style={{
+            borderColor: "var(--border)",
+            background: "var(--glass)",
+            color: accent,
+          }}
+        >
+          {value}
+        </div>
+        <button
+          type="button"
+          onClick={inc}
+          disabled={value >= max}
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border text-2xl font-bold transition-transform active:scale-90 disabled:opacity-40"
+          style={{
+            borderColor: `color-mix(in oklab, ${accent} 55%, transparent)`,
+            background: `color-mix(in oklab, ${accent} 14%, transparent)`,
+            color: accent,
+          }}
+          aria-label={`Increase ${label}`}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
